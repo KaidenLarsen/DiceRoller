@@ -1,20 +1,26 @@
 package com.zybooks.diceroller;
 
+import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
+
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.view.ContextMenu;
+import android.view.GestureDetector;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-
+import androidx.core.view.GestureDetectorCompat;
+import android.util.Log;
 
 public class MainActivity extends AppCompatActivity
         implements RollLengthDialogFragment.OnRollLengthSelectedListener {
@@ -30,6 +36,12 @@ public class MainActivity extends AppCompatActivity
     private int mCurrentDie;
     private int mInitX;
     private int mInitY;
+    private GestureDetectorCompat mDetector;
+    float velocityThresholdFraction = 0.15f;
+    float maxPossibleVelocity;
+
+
+
 
     @Override
     public void onRollLengthClick(int which) {
@@ -42,6 +54,8 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        maxPossibleVelocity = ViewConfiguration.get(this).getScaledMaximumFlingVelocity();
 
         // Create an array of Dice
         mDice = new Dice[MAX_DICE];
@@ -59,41 +73,36 @@ public class MainActivity extends AppCompatActivity
         mVisibleDice = MAX_DICE;
 
         showDice();
-        // Register context menus for all dice and tag each die
-        for (int i = 0; i < mDiceImageViews.length; i++) {
-            registerForContextMenu(mDiceImageViews[i]);
-            mDiceImageViews[i].setTag(i);
+
+        mDetector = new GestureDetectorCompat(this, new DiceGestureListener());
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        mDetector.onTouchEvent(event);
+        return super.onTouchEvent(event);
+    }
+
+    private class DiceGestureListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onDown(MotionEvent event) {
+            return true;
         }
 
-
-        // Moving finger left or right changes dice number
-        mDiceImageViews[0].setOnTouchListener((v, event) -> {
-            int action = event.getAction();
-            switch (action) {
-                case MotionEvent.ACTION_DOWN:
-                    mInitX = (int) event.getX();
-                    mInitY = (int) event.getY();
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    int x = (int) event.getX();
-                    int y = (int) event.getY();
-
-                    // See if movement is at least 20 pixels
-                    if (Math.abs(x - mInitX ) >= 20 || (Math.abs(y - mInitY ) >= 20))  {
-                        if (x > mInitX || y < mInitY) {
-                            mDice[0].addOne();
-                        }
-                        else {
-                            mDice[0].subtractOne();
-                        }
-                        showDice();
-                        mInitX = x;
-                    }
-
-                    return true;
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if(velocityY > velocityThresholdFraction * maxPossibleVelocity) {
+                rollDice();
+                Log.d(TAG, "onFling: velocity = " +velocityY+ " Max velocity = " + maxPossibleVelocity);
             }
-            return false;
-        });
+            return true;
+        }
+
+        @Override
+        public boolean onDoubleTap(MotionEvent event) {
+            mDice[0].addOne();
+            return true;
+        }
     }
 
     @Override
